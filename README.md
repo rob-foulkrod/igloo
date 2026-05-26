@@ -1,4 +1,4 @@
-# 🏔️ Igloo Events
+# 🏔️ Igloo Events!
 
 > *Because even penguins need a social calendar.*
 
