@@ -1,0 +1,320 @@
+# =============================================================================
+# Igloo CI Pipeline (continuous integration only — no deployment)
+#
+# Highlights
+#   * Multi-stage: Validate → Build & Test (cross-OS matrix) → Quality Gate → Package
+#   * Parallel validation jobs: format check, vulnerable packages, outdated packages
+#   * Cross-OS test matrix (windows-latest + ubuntu-latest) collecting Cobertura coverage
+#   * ReportGenerator merges per-OS coverage into a single report
+#   * Coverage published to Azure DevOps via PublishCodeCoverageResults@2
+#   * Hard coverage threshold gate (fails the build if below target)
+#   * Build artifacts (web app + merged coverage report) published for download
+# =============================================================================
+
+name: igloo-CI-$(Date:yyyyMMdd)$(Rev:.r)
+
+# CI-only: run on every push to main and feature branches; no PR triggers
+trigger:
+  batch: true
+  branches:
+    include:
+      - main
+      - feature/*
+      - release/*
+  paths:
+    include:
+      - src/**
+      - igloo.slnx
+      - azure-pipelines-ci.yml
+
+pr: none
+
+# Default pool used by jobs that don't pick their own OS (Validate, QualityGate, Package).
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  solution: 'igloo.slnx'
+  webProject: 'src/web/web.csproj'
+  testProject: 'src/web.tests/web.tests.csproj'
+  dotnetSdkVersion: '10.0.x'
+  # Minimum line coverage required to pass the quality gate (percent)
+  coverageThreshold: 70
+  # Pin the NuGet package cache to a known, cross-platform path so Cache@2 works the same on every OS.
+  NUGET_PACKAGES: $(Pipeline.Workspace)/.nuget/packages
+  # Disable .NET CLI telemetry & first-run experience on hosted agents
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_NOLOGO: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+
+stages:
+  # ---------------------------------------------------------------------------
+  # Stage 1: Validate — fast, parallel sanity checks before we burn agent time
+  # ---------------------------------------------------------------------------
+  - stage: Validate
+    displayName: 'Validate'
+    jobs:
+      - job: Format
+        displayName: 'Verify code formatting (dotnet format)'
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Install .NET SDK'
+            inputs:
+              packageType: 'sdk'
+              version: '$(dotnetSdkVersion)'
+
+          - script: dotnet format $(solution) --verify-no-changes --severity warn --verbosity diagnostic
+            displayName: 'dotnet format --verify-no-changes'
+
+      - job: Security
+        displayName: 'Scan for vulnerable / deprecated packages'
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Install .NET SDK'
+            inputs:
+              packageType: 'sdk'
+              version: '$(dotnetSdkVersion)'
+
+          - script: dotnet restore $(solution)
+            displayName: 'Restore packages'
+
+          - pwsh: |
+              Write-Host "##[group]Vulnerable packages"
+              $vuln = dotnet list $(solution) package --vulnerable --include-transitive 2>&1 | Out-String
+              Write-Host $vuln
+              Write-Host "##[endgroup]"
+              if ($vuln -match 'has the following vulnerable packages') {
+                Write-Host "##vso[task.logissue type=error]Vulnerable NuGet packages detected."
+                exit 1
+              }
+            displayName: 'Fail on vulnerable packages'
+
+          - pwsh: |
+              Write-Host "##[group]Deprecated packages"
+              $dep = dotnet list $(solution) package --deprecated 2>&1 | Out-String
+              Write-Host $dep
+              Write-Host "##[endgroup]"
+              if ($dep -match 'has the following deprecated packages') {
+                Write-Host "##vso[task.logissue type=warning]Deprecated NuGet packages detected."
+              }
+            displayName: 'Warn on deprecated packages'
+
+      - job: Outdated
+        displayName: 'Report outdated packages (informational)'
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Install .NET SDK'
+            inputs:
+              packageType: 'sdk'
+              version: '$(dotnetSdkVersion)'
+
+          - script: dotnet restore $(solution)
+            displayName: 'Restore packages'
+
+          - script: dotnet list $(solution) package --outdated
+            displayName: 'List outdated packages'
+            continueOnError: true
+
+  # ---------------------------------------------------------------------------
+  # Stage 2: Build & Test — cross-OS matrix (Windows + Linux), collect coverage
+  #
+  # Why cross-OS:
+  #   * Catches path-casing, line-ending, and case-sensitivity bugs early
+  #     (Windows is case-insensitive; Linux is not — a missing/mis-cased file or
+  #     view name will silently work on Windows and 404 on Linux).
+  #   * Validates the app builds and tests pass on the OS we'll likely
+  #     containerize / deploy to (Linux App Service / Container Apps).
+  #   * Forces shell scripts to stay portable (pwsh, not powershell).
+  # ---------------------------------------------------------------------------
+  - stage: BuildAndTest
+    displayName: 'Build & Test'
+    dependsOn: Validate
+    jobs:
+      - job: Test
+        displayName: 'Build + Test'
+        strategy:
+          matrix:
+            Linux:
+              imageName: 'ubuntu-latest'
+              osTag: 'Linux'
+            Windows:
+              imageName: 'windows-latest'
+              osTag: 'Windows'
+          maxParallel: 2
+        pool:
+          vmImage: $(imageName)
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Install .NET SDK'
+            inputs:
+              packageType: 'sdk'
+              version: '$(dotnetSdkVersion)'
+
+          - task: Cache@2
+            displayName: 'Cache NuGet packages'
+            inputs:
+              key: 'nuget | "$(Agent.OS)" | **/*.csproj'
+              restoreKeys: |
+                nuget | "$(Agent.OS)"
+              path: '$(NUGET_PACKAGES)'
+
+          - script: dotnet --info
+            displayName: 'Show .NET info'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore'
+            inputs:
+              command: 'restore'
+              projects: '$(solution)'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Build (Release on $(osTag))'
+            inputs:
+              command: 'build'
+              projects: '$(solution)'
+              arguments: '--configuration Release --no-restore /p:ContinuousIntegrationBuild=true'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Test on $(osTag) + Cobertura coverage'
+            inputs:
+              command: 'test'
+              projects: '$(testProject)'
+              # NOTE: do NOT pass --logger trx or --results-directory here.
+              # publishTestResults: true makes the task inject both automatically;
+              # passing them again causes "--results-directory expects a single argument but 2 were provided".
+              arguments: >-
+                --configuration Release
+                --no-build
+                --collect:"XPlat Code Coverage"
+                --
+                DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+              publishTestResults: true
+              testRunTitle: 'web.tests ($(osTag))'
+
+          - task: CopyFiles@2
+            displayName: 'Stage coverage files for merge'
+            inputs:
+              # The DotNetCoreCLI@2 task writes results under $(Agent.TempDirectory)
+              # in a per-run GUID folder, so we glob recursively.
+              SourceFolder: '$(Agent.TempDirectory)'
+              Contents: '**/coverage.cobertura.xml'
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/coverage-raw'
+              flattenFolders: true
+
+          - publish: '$(Build.ArtifactStagingDirectory)/coverage-raw'
+            displayName: 'Publish raw coverage ($(osTag))'
+            artifact: 'coverage-raw-$(osTag)'
+
+  # ---------------------------------------------------------------------------
+  # Stage 3: Quality Gate — merge coverage, publish HTML report, enforce threshold
+  # ---------------------------------------------------------------------------
+  - stage: QualityGate
+    displayName: 'Quality Gate'
+    dependsOn: BuildAndTest
+    jobs:
+      - job: Coverage
+        displayName: 'Merge coverage + enforce threshold'
+        steps:
+          - checkout: none
+
+          - task: UseDotNet@2
+            displayName: 'Install .NET SDK'
+            inputs:
+              packageType: 'sdk'
+              version: '$(dotnetSdkVersion)'
+
+          - download: current
+            displayName: 'Download Linux coverage'
+            artifact: 'coverage-raw-Linux'
+
+          - download: current
+            displayName: 'Download Windows coverage'
+            artifact: 'coverage-raw-Windows'
+
+          - pwsh: |
+              dotnet tool install --global dotnet-reportgenerator-globaltool
+              # Ensure the global tools dir is on PATH for subsequent steps (cross-platform).
+              $toolsPath = Join-Path $HOME '.dotnet/tools'
+              Write-Host "##vso[task.prependpath]$toolsPath"
+            displayName: 'Install ReportGenerator'
+
+          - pwsh: |
+              $reports = "$(Pipeline.Workspace)/coverage-raw-Linux/*.xml;$(Pipeline.Workspace)/coverage-raw-Windows/*.xml"
+              $target  = "$(Build.ArtifactStagingDirectory)/coverage-report"
+              reportgenerator `
+                "-reports:$reports" `
+                "-targetdir:$target" `
+                "-reporttypes:HtmlInline_AzurePipelines;Cobertura;MarkdownSummaryGithub;Badges" `
+                "-title:Igloo Coverage" `
+                "-tag:$(Build.BuildNumber)"
+            displayName: 'Generate merged coverage report'
+
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publish code coverage to Azure DevOps'
+            inputs:
+              summaryFileLocation: '$(Build.ArtifactStagingDirectory)/coverage-report/Cobertura.xml'
+              pathToSources: '$(Build.SourcesDirectory)/src'
+
+          - publish: '$(Build.ArtifactStagingDirectory)/coverage-report'
+            displayName: 'Publish coverage HTML artifact'
+            artifact: 'coverage-report'
+
+          - pwsh: |
+              [xml]$xml = Get-Content "$(Build.ArtifactStagingDirectory)/coverage-report/Cobertura.xml"
+              $lineRate   = [double]$xml.coverage.'line-rate'
+              $branchRate = [double]$xml.coverage.'branch-rate'
+              $linePct    = [math]::Round($lineRate * 100, 2)
+              $branchPct  = [math]::Round($branchRate * 100, 2)
+              $threshold  = [int]'$(coverageThreshold)'
+
+              Write-Host "Line coverage   : $linePct%"
+              Write-Host "Branch coverage : $branchPct%"
+              Write-Host "Threshold       : $threshold%"
+
+              # Surface on the build summary
+              Write-Host "##vso[task.setvariable variable=LineCoverage;isOutput=true]$linePct"
+              Write-Host "##vso[task.setvariable variable=BranchCoverage;isOutput=true]$branchPct"
+
+              if ($linePct -lt $threshold) {
+                Write-Host "##vso[task.logissue type=error]Line coverage $linePct% is below threshold $threshold%."
+                exit 1
+              }
+              Write-Host "##vso[task.complete result=Succeeded;]Coverage gate passed."
+            displayName: 'Enforce coverage threshold'
+            name: gate
+
+  # ---------------------------------------------------------------------------
+  # Stage 4: Package — produce a deployable web artifact (CI only, no deploy)
+  # ---------------------------------------------------------------------------
+  - stage: Package
+    displayName: 'Package'
+    dependsOn: QualityGate
+    condition: succeeded()
+    jobs:
+      - job: PublishWeb
+        displayName: 'Publish web app artifact'
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Install .NET SDK'
+            inputs:
+              packageType: 'sdk'
+              version: '$(dotnetSdkVersion)'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore'
+            inputs:
+              command: 'restore'
+              projects: '$(solution)'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Publish web (Release)'
+            inputs:
+              command: 'publish'
+              publishWebProjects: false
+              projects: '$(webProject)'
+              arguments: '--configuration Release --output $(Build.ArtifactStagingDirectory)/web /p:ContinuousIntegrationBuild=true'
+              zipAfterPublish: true
+
+          - publish: '$(Build.ArtifactStagingDirectory)/web'
+            displayName: 'Publish artifact: web'
+            artifact: 'web'
