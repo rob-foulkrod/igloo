@@ -52,6 +52,20 @@ public class InMemoryRegistrationServiceTests
     }
 
     [Fact]
+    public void Create_UnknownEventId_ThrowsKeyNotFoundException()
+    {
+        var (_, regService) = CreateServices();
+
+        Assert.Throws<KeyNotFoundException>(() =>
+            regService.Create(new Registration
+            {
+                EventId = 999,
+                Name = "Ghost",
+                Email = "ghost@test.com"
+            }));
+    }
+
+    [Fact]
     public void GetByEventId_ReturnsOnlyMatchingRegistrations()
     {
         var (_, regService) = CreateServices();

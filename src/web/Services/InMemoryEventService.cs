@@ -4,12 +4,13 @@ namespace web.Services;
 
 public class InMemoryEventService : IEventService
 {
+    // Not thread-safe — v1 in-memory demo
     private readonly List<Event> _events = new();
     private int _nextId = 1;
 
     public InMemoryEventService()
     {
-        // Seed data per SPEC
+        // Seed data per SPEC — dates evaluated at startup
         Create(new Event
         {
             Title = "Community Ice Skating",

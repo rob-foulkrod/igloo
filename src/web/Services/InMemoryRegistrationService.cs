@@ -4,6 +4,7 @@ namespace web.Services;
 
 public class InMemoryRegistrationService : IRegistrationService
 {
+    // Not thread-safe — v1 in-memory demo
     private readonly List<Registration> _registrations = new();
     private readonly IEventService _eventService;
     private int _nextId = 1;
@@ -21,7 +22,10 @@ public class InMemoryRegistrationService : IRegistrationService
 
     public Registration Create(Registration registration)
     {
-        if (!HasCapacity(registration.EventId))
+        var evt = _eventService.GetById(registration.EventId)
+            ?? throw new KeyNotFoundException($"Event {registration.EventId} not found.");
+
+        if (GetRegistrationCount(evt.Id) >= evt.Capacity)
             throw new InvalidOperationException("Event is at full capacity.");
 
         registration.Id = _nextId++;

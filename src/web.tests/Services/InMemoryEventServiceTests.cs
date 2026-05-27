@@ -48,8 +48,9 @@ public class InMemoryEventServiceTests
 
         var created = service.Create(newEvent);
 
-        Assert.Equal(4, created.Id); // 3 seeded + 1
+        Assert.True(created.Id > 0);
         Assert.Contains(created, service.GetAll());
+        Assert.Equal(4, service.GetAll().Count());
     }
 
     [Fact]
