@@ -1,3 +1,13 @@
+/* Frost Theme — Igloo Events */
+:root {
+  --frost-navy: #1a2332;
+  --frost-navy-light: #243447;
+  --frost-ice: #4fc3f7;
+  --frost-ice-light: #b3e5fc;
+  --frost-bg: #f4f7fa;
+  --frost-card-shadow: 0 2px 12px rgba(26, 35, 50, 0.08);
+}
+
 html {
   font-size: 14px;
 }
@@ -8,17 +18,188 @@ html {
   }
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
-}
-
 html {
   position: relative;
   min-height: 100%;
 }
 
 body {
-  margin-bottom: 60px;
+  margin-bottom: 80px;
+  background-color: var(--frost-bg);
+}
+
+/* Navbar */
+.navbar-frost {
+  background-color: var(--frost-navy) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+.navbar-frost .navbar-brand {
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.3rem;
+  letter-spacing: -0.5px;
+}
+.navbar-frost .nav-link {
+  color: rgba(255, 255, 255, 0.8) !important;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+.navbar-frost .nav-link:hover {
+  color: var(--frost-ice) !important;
+}
+.navbar-frost .navbar-toggler {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.navbar-frost .navbar-toggler-icon {
+  filter: invert(1);
+}
+
+/* Footer */
+.footer-frost {
+  background-color: var(--frost-navy);
+  color: rgba(255, 255, 255, 0.7);
+  padding: 1.2rem 0;
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+}
+.footer-frost a {
+  color: var(--frost-ice-light);
+}
+.footer-frost a:hover {
+  color: #fff;
+}
+
+/* Cards */
+.card {
+  border: none;
+  border-radius: 0.75rem;
+  box-shadow: var(--frost-card-shadow);
+}
+.card-header-frost {
+  background: linear-gradient(135deg, var(--frost-navy), var(--frost-navy-light));
+  color: #fff;
+  border-radius: 0.75rem 0.75rem 0 0 !important;
+  padding: 1rem 1.25rem;
+}
+
+/* Hero Section */
+.hero-frost {
+  background: linear-gradient(135deg, var(--frost-navy) 0%, #2d4a6f 50%, var(--frost-ice) 100%);
+  color: #fff;
+  padding: 4rem 2rem;
+  border-radius: 1rem;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+.hero-frost h1 {
+  font-weight: 800;
+  font-size: 2.8rem;
+  margin-bottom: 0.5rem;
+}
+.hero-frost .lead {
+  font-size: 1.2rem;
+  opacity: 0.9;
+  max-width: 600px;
+  margin: 0 auto;
+}
+.hero-frost .btn {
+  margin-top: 1.5rem;
+}
+
+/* Buttons */
+.btn-frost {
+  background-color: var(--frost-ice);
+  border-color: var(--frost-ice);
+  color: var(--frost-navy);
+  font-weight: 600;
+}
+.btn-frost:hover {
+  background-color: #29b6f6;
+  border-color: #29b6f6;
+  color: var(--frost-navy);
+}
+.btn-primary {
+  background-color: var(--frost-ice);
+  border-color: var(--frost-ice);
+  color: var(--frost-navy);
+  font-weight: 600;
+}
+.btn-primary:hover {
+  background-color: #29b6f6;
+  border-color: #29b6f6;
+  color: var(--frost-navy);
+}
+
+/* Event Cards Grid */
+.event-card {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.event-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(26, 35, 50, 0.12);
+}
+.event-card .card-title {
+  font-weight: 700;
+  color: var(--frost-navy);
+}
+.event-card .badge-date {
+  background-color: var(--frost-ice);
+  color: var(--frost-navy);
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 0.4em 0.7em;
+  border-radius: 0.4rem;
+}
+.event-card .event-meta {
+  font-size: 0.9rem;
+  color: #5a6a7a;
+}
+.event-card .event-meta i {
+  color: var(--frost-ice);
+  margin-right: 0.3rem;
+}
+
+/* Capacity Bar */
+.capacity-bar {
+  height: 8px;
+  border-radius: 4px;
+  background-color: #e9ecef;
+}
+.capacity-bar .progress-bar {
+  background: linear-gradient(90deg, var(--frost-ice), #29b6f6);
+  border-radius: 4px;
+}
+.capacity-bar-full .progress-bar {
+  background: linear-gradient(90deg, #ef5350, #e53935);
+}
+
+/* Form Cards */
+.form-card {
+  max-width: 600px;
+  margin: 0 auto;
+}
+.form-card .card-body {
+  padding: 2rem;
+}
+
+/* Alerts */
+.alert-frost-success {
+  background-color: #e8f5e9;
+  border-color: #a5d6a7;
+  color: #2e7d32;
+  border-radius: 0.5rem;
+}
+.alert-frost-error {
+  background-color: #ffebee;
+  border-color: #ef9a9a;
+  color: #c62828;
+  border-radius: 0.5rem;
+}
+
+/* Focus states */
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem var(--frost-ice);
 }
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {

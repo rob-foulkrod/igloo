@@ -2,44 +2,63 @@
 
 @{
     ViewData["Title"] = "Event Details";
+    var regCount = (int)ViewBag.RegistrationCount;
+    var remaining = (int)ViewBag.RemainingCapacity;
+    var pct = Model.Capacity > 0 ? (int)(regCount * 100.0 / Model.Capacity) : 0;
+    var barClass = remaining == 0 ? "capacity-bar capacity-bar-full" : "capacity-bar";
 }
 
-<h1>@Model.Title</h1>
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header-frost">
+                <h3 class="mb-0"><i class="bi bi-calendar-event"></i> @Model.Title</h3>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">@Model.Description</p>
 
-<div class="card mb-4">
-    <div class="card-body">
-        <dl class="row">
-            <dt class="col-sm-3">@Html.DisplayNameFor(model => model.Description)</dt>
-            <dd class="col-sm-9">@Html.DisplayFor(model => model.Description)</dd>
+                <div class="row mb-3">
+                    <div class="col-sm-6">
+                        <p class="mb-1"><i class="bi bi-calendar3 text-primary"></i> <strong>Start:</strong> @Model.StartDate.ToString("f")</p>
+                        <p class="mb-1"><i class="bi bi-calendar3 text-primary"></i> <strong>End:</strong> @Model.EndDate.ToString("f")</p>
+                    </div>
+                    <div class="col-sm-6">
+                        <p class="mb-1"><i class="bi bi-geo-alt-fill text-primary"></i> <strong>Location:</strong> @Model.Location</p>
+                        <p class="mb-1"><i class="bi bi-people-fill text-primary"></i> <strong>Capacity:</strong> @Model.Capacity</p>
+                    </div>
+                </div>
 
-            <dt class="col-sm-3">@Html.DisplayNameFor(model => model.StartDate)</dt>
-            <dd class="col-sm-9">@Model.StartDate.ToString("f")</dd>
-
-            <dt class="col-sm-3">@Html.DisplayNameFor(model => model.EndDate)</dt>
-            <dd class="col-sm-9">@Model.EndDate.ToString("f")</dd>
-
-            <dt class="col-sm-3">@Html.DisplayNameFor(model => model.Location)</dt>
-            <dd class="col-sm-9">@Html.DisplayFor(model => model.Location)</dd>
-
-            <dt class="col-sm-3">@Html.DisplayNameFor(model => model.Capacity)</dt>
-            <dd class="col-sm-9">@Html.DisplayFor(model => model.Capacity)</dd>
-
-            <dt class="col-sm-3">Registrations</dt>
-            <dd class="col-sm-9">@ViewBag.RegistrationCount / @Model.Capacity (@ViewBag.RemainingCapacity spots remaining)</dd>
-        </dl>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <small class="fw-bold">Registrations: @regCount / @Model.Capacity</small>
+                        <small class="text-muted">@remaining spots remaining</small>
+                    </div>
+                    <div class="@barClass" style="height: 10px;">
+                        <div class="progress-bar" role="progressbar" style="width: @(pct)%; height: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer bg-transparent">
+                @if (remaining > 0)
+                {
+                    <a asp-controller="Registrations" asp-action="Create" asp-route-eventId="@Model.Id"
+                       class="btn btn-primary me-2">
+                        <i class="bi bi-person-plus"></i> Register
+                    </a>
+                }
+                else
+                {
+                    <span class="btn btn-outline-danger disabled me-2">
+                        <i class="bi bi-x-circle"></i> Event Full
+                    </span>
+                }
+                <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-outline-secondary me-2">
+                    <i class="bi bi-pencil"></i> Edit
+                </a>
+                <a asp-action="Index" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to List
+                </a>
+            </div>
+        </div>
     </div>
-</div>
-
-<div>
-    @if (ViewBag.RemainingCapacity > 0)
-    {
-        <a asp-controller="Registrations" asp-action="Create" asp-route-eventId="@Model.Id"
-           class="btn btn-primary">Register</a>
-    }
-    else
-    {
-        <span class="btn btn-outline-danger disabled">Event Full</span>
-    }
-    <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-secondary">Edit</a>
-    <a asp-action="Index" class="btn btn-outline-secondary">Back to List</a>
 </div>
