@@ -1,0 +1,295 @@
+# =============================================================================
+# Igloo CI workflow (continuous integration only — no deployment)
+#
+# Mirrors azure-pipelines-ci.yml conceptually, using GitHub-native idioms:
+#   * Flat jobs chained with `needs:` (no stages)
+#   * Cross-OS matrix (ubuntu + windows) for the test job
+#   * Coverage merged with ReportGenerator and surfaced via $GITHUB_STEP_SUMMARY
+#   * Test results posted as a Check Run via dorny/test-reporter
+#   * Hard coverage gate that fails the workflow below threshold
+#   * Web artifact uploaded for download from the run page
+# =============================================================================
+
+name: CI
+run-name: CI · ${{ github.ref_name }} · ${{ github.event.head_commit.message || github.event_name }}
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+      - 'release/**'
+    paths:
+      - 'src/**'
+      - 'igloo.slnx'
+      - '.github/workflows/ci.yml'
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref — the GitHub equivalent of `trigger.batch: true`.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least-privilege token. `checks: write` lets dorny/test-reporter post a Check Run.
+permissions:
+  contents: read
+  checks: write
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  SOLUTION: igloo.slnx
+  WEB_PROJECT: src/web/web.csproj
+  TEST_PROJECT: src/web.tests/web.tests.csproj
+  COVERAGE_THRESHOLD: '70'
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Validate — three parallel jobs, fast feedback before we burn matrix minutes.
+  # ---------------------------------------------------------------------------
+  format:
+    name: Verify formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: dotnet format --verify-no-changes
+        run: dotnet format "$SOLUTION" --verify-no-changes --severity warn --verbosity diagnostic
+
+  security:
+    name: Vulnerable / deprecated packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Restore
+        run: dotnet restore "$SOLUTION"
+
+      - name: Fail on vulnerable packages
+        shell: pwsh
+        run: |
+          Write-Host "::group::Vulnerable packages"
+          $vuln = dotnet list $env:SOLUTION package --vulnerable --include-transitive 2>&1 | Out-String
+          Write-Host $vuln
+          Write-Host "::endgroup::"
+          if ($vuln -match 'has the following vulnerable packages') {
+            Write-Host "::error::Vulnerable NuGet packages detected."
+            exit 1
+          }
+
+      - name: Warn on deprecated packages
+        shell: pwsh
+        run: |
+          Write-Host "::group::Deprecated packages"
+          $dep = dotnet list $env:SOLUTION package --deprecated 2>&1 | Out-String
+          Write-Host $dep
+          Write-Host "::endgroup::"
+          if ($dep -match 'has the following deprecated packages') {
+            # Surface the offending lines in the warning so they show in the run summary.
+            $offenders = ($dep -split "`n" | Select-String '^\s*>\s' | ForEach-Object { $_.Line.Trim() }) -join ' | '
+            Write-Host "::warning::Deprecated NuGet packages detected: $offenders"
+          }
+
+  outdated:
+    name: Outdated packages (informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - run: dotnet restore "$SOLUTION"
+      - run: dotnet list "$SOLUTION" package --outdated
+
+  # ---------------------------------------------------------------------------
+  # Build & Test — cross-OS matrix, Cobertura coverage, results as a Check Run.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test on ${{ matrix.os }}
+    needs: [format, security]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # GitHub idiom: cache NuGet at the default location, keyed by csproj hash.
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'igloo.slnx') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore ${{ env.SOLUTION }}
+
+      - name: Build (Release)
+        run: dotnet build ${{ env.SOLUTION }} --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
+
+      - name: Test + Cobertura coverage
+        shell: bash
+        run: |
+          dotnet test "${TEST_PROJECT}" \
+            --configuration Release \
+            --no-build \
+            --settings coverlet.runsettings \
+            --logger "trx;LogFileName=test-results.trx" \
+            --results-directory TestResults \
+            --collect:"XPlat Code Coverage"
+
+      # Upload TRX so a separate job can render them as a unified Check Run.
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: TestResults/**/*.trx
+
+      - name: Upload raw coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-raw-${{ matrix.os }}
+          path: TestResults/**/coverage.cobertura.xml
+
+  # ---------------------------------------------------------------------------
+  # Test report — surface TRX results as a GitHub Check Run (the "Tests" UI).
+  # ---------------------------------------------------------------------------
+  report-tests:
+    name: Publish test report
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-*
+          path: test-results
+          merge-multiple: true
+
+      - name: Publish test report (Check Run)
+        uses: dorny/test-reporter@v1
+        with:
+          name: xUnit results
+          path: 'test-results/**/*.trx'
+          reporter: dotnet-trx
+          fail-on-error: true
+
+  # ---------------------------------------------------------------------------
+  # Quality Gate — merge coverage, write a step summary, enforce threshold.
+  # ---------------------------------------------------------------------------
+  coverage:
+    name: Quality gate (coverage)
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      line: ${{ steps.gate.outputs.line }}
+      branch: ${{ steps.gate.outputs.branch }}
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Download all raw coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-raw-*
+          path: coverage-raw
+
+      - name: Install ReportGenerator
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+      - name: Generate merged coverage report
+        run: |
+          reportgenerator \
+            "-reports:coverage-raw/**/coverage.cobertura.xml" \
+            "-targetdir:coverage-report" \
+            "-reporttypes:HtmlInline;Cobertura;MarkdownSummaryGithub;Badges" \
+            "-classfilters:-AspNetCoreGeneratedDocument.*" \
+            "-title:Igloo Coverage" \
+            "-tag:${{ github.sha }}"
+
+      # The defining GitHub idiom: post a rich Markdown summary to the run page.
+      - name: Append coverage summary to job summary
+        run: |
+          {
+            echo "## Coverage report"
+            echo ""
+            cat coverage-report/SummaryGithub.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report (HTML + Cobertura + badges)
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report
+
+      - name: Enforce coverage threshold
+        id: gate
+        shell: pwsh
+        run: |
+          [xml]$xml = Get-Content "coverage-report/Cobertura.xml"
+          $linePct   = [math]::Round([double]$xml.coverage.'line-rate'   * 100, 2)
+          $branchPct = [math]::Round([double]$xml.coverage.'branch-rate' * 100, 2)
+          $threshold = [int]$env:COVERAGE_THRESHOLD
+
+          Write-Host "Line coverage   : $linePct%"
+          Write-Host "Branch coverage : $branchPct%"
+          Write-Host "Threshold       : $threshold%"
+
+          "line=$linePct"     | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "branch=$branchPct" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+          if ($linePct -lt $threshold) {
+            Write-Host "::error::Line coverage $linePct% is below threshold $threshold%."
+            exit 1
+          }
+          Write-Host "::notice::Coverage gate passed (line=$linePct%, branch=$branchPct%)."
+
+  # ---------------------------------------------------------------------------
+  # Package — produce a deployable web artifact only if the gate passed.
+  # ---------------------------------------------------------------------------
+  package:
+    name: Package web artifact
+    needs: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore "$SOLUTION"
+
+      - name: Publish web (Release)
+        run: |
+          dotnet publish "$WEB_PROJECT" \
+            --configuration Release \
+            --output ./publish \
+            -p:ContinuousIntegrationBuild=true
+
+      - name: Zip
+        run: |
+          cd publish
+          zip -r ../web.zip .
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: web.zip
