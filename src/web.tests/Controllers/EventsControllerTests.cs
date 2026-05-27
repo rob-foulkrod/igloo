@@ -24,7 +24,7 @@ public class EventsControllerTests
         var result = controller.Index() as ViewResult;
 
         Assert.NotNull(result);
-        var model = Assert.IsAssignableFrom<IEnumerable<Event>>(result.Model);
+        var model = Assert.IsAssignableFrom<IEnumerable<EventListItemVm>>(result.Model);
         Assert.Equal(3, model.Count());
     }
 

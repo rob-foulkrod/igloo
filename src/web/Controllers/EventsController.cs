@@ -23,7 +23,12 @@ public class EventsController : Controller
     public IActionResult Index()
     {
         var events = _eventService.GetAll();
-        return View(events);
+        var viewModel = events.Select(e => new EventListItemVm
+        {
+            Event = e,
+            RegistrationCount = _registrationService.GetRegistrationCount(e.Id)
+        });
+        return View(viewModel);
     }
 
     public IActionResult Details(int id)
