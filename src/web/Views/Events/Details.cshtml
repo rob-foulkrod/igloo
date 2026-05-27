@@ -31,6 +31,15 @@
 </div>
 
 <div>
+    @if (ViewBag.RemainingCapacity > 0)
+    {
+        <a asp-controller="Registrations" asp-action="Create" asp-route-eventId="@Model.Id"
+           class="btn btn-primary">Register</a>
+    }
+    else
+    {
+        <span class="btn btn-outline-danger disabled">Event Full</span>
+    }
     <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-secondary">Edit</a>
     <a asp-action="Index" class="btn btn-outline-secondary">Back to List</a>
 </div>

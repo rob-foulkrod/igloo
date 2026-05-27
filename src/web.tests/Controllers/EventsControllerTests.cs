@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using web.Controllers;
 using web.Models;
 using web.Services;
@@ -12,8 +13,7 @@ public class EventsControllerTests
     {
         var eventService = new InMemoryEventService();
         var regService = new InMemoryRegistrationService(eventService);
-        var logger = LoggerFactory.Create(b => { }).CreateLogger<EventsController>();
-        return new EventsController(eventService, regService, logger);
+        return new EventsController(eventService, regService, NullLogger<EventsController>.Instance);
     }
 
     [Fact]
@@ -144,6 +144,26 @@ public class EventsControllerTests
         var result = controller.Edit(1, evt);
 
         Assert.IsType<BadRequestResult>(result);
+    }
+
+    [Fact]
+    public void Edit_Post_NonExistingId_ReturnsNotFound()
+    {
+        var controller = CreateController();
+        var evt = new Event
+        {
+            Id = 999,
+            Title = "Ghost",
+            Description = "Doesn't exist",
+            StartDate = DateTime.UtcNow.AddDays(10),
+            EndDate = DateTime.UtcNow.AddDays(10).AddHours(2),
+            Location = "Nowhere",
+            Capacity = 10
+        };
+
+        var result = controller.Edit(999, evt);
+
+        Assert.IsType<NotFoundResult>(result);
     }
 
     [Fact]

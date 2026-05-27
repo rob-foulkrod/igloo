@@ -35,8 +35,9 @@ public class EventsController : Controller
             return NotFound();
         }
 
-        ViewBag.RegistrationCount = _registrationService.GetRegistrationCount(id);
-        ViewBag.RemainingCapacity = evt.Capacity - _registrationService.GetRegistrationCount(id);
+        var registrationCount = _registrationService.GetRegistrationCount(id);
+        ViewBag.RegistrationCount = registrationCount;
+        ViewBag.RemainingCapacity = evt.Capacity - registrationCount;
         return View(evt);
     }
 
