@@ -6,7 +6,7 @@ public class Registration
 {
     public int Id { get; set; }
 
-    [Required]
+    [Range(1, int.MaxValue, ErrorMessage = "EventId is required.")]
     [Display(Name = "Event")]
     public int EventId { get; set; }
 
@@ -19,5 +19,5 @@ public class Registration
     public string Email { get; set; } = string.Empty;
 
     [Display(Name = "Registered At")]
-    public DateTime RegisteredAt { get; set; } = DateTime.UtcNow;
+    public DateTime RegisteredAt { get; set; }
 }

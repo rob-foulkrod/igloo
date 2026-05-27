@@ -87,4 +87,31 @@ public class EventModelTests
         var results = ValidateModel(evt);
         Assert.Contains(results, r => r.MemberNames.Contains("Capacity"));
     }
+
+    [Fact]
+    public void StartDateInThePast_FailsValidation()
+    {
+        var evt = CreateValidEvent();
+        evt.StartDate = DateTime.UtcNow.AddDays(-1);
+        var results = ValidateModel(evt);
+        Assert.Contains(results, r => r.MemberNames.Contains("StartDate"));
+    }
+
+    [Fact]
+    public void EndDateBeforeStartDate_FailsValidation()
+    {
+        var evt = CreateValidEvent();
+        evt.EndDate = evt.StartDate.AddHours(-1);
+        var results = ValidateModel(evt);
+        Assert.Contains(results, r => r.MemberNames.Contains("EndDate"));
+    }
+
+    [Fact]
+    public void EndDateEqualsStartDate_FailsValidation()
+    {
+        var evt = CreateValidEvent();
+        evt.EndDate = evt.StartDate;
+        var results = ValidateModel(evt);
+        Assert.Contains(results, r => r.MemberNames.Contains("EndDate"));
+    }
 }

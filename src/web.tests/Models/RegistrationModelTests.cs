@@ -63,4 +63,13 @@ public class RegistrationModelTests
         var results = ValidateModel(reg);
         Assert.Contains(results, r => r.MemberNames.Contains("Email"));
     }
+
+    [Fact]
+    public void MissingEventId_FailsValidation()
+    {
+        var reg = CreateValidRegistration();
+        reg.EventId = 0;
+        var results = ValidateModel(reg);
+        Assert.Contains(results, r => r.MemberNames.Contains("EventId"));
+    }
 }
