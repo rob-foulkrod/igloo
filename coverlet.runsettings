@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Coverlet collector settings for: dotnet test /collect:"XPlat Code Coverage"
+  Referenced by both pipelines via: /settings coverlet.runsettings
+
+  Excludes:
+    * Razor-compiled views (AspNetCoreGeneratedDocument.*) — unit tests don't render
+      views, so they sit at 0% and skew the headline coverage number downward.
+    * Anything decorated with [GeneratedCode] or [ExcludeFromCodeCoverage].
+    * EF migrations / designer files (future-proofing; harmless if absent).
+-->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+
+          <!-- Format: [assemblyFilter]typeFilter — wildcards allowed. -->
+          <Exclude>[*]AspNetCoreGeneratedDocument.*,[xunit.*]*,[*]*.Tests.*</Exclude>
+
+          <ExcludeByAttribute>GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+
+          <ExcludeByFile>**/Migrations/*.cs,**/*.Designer.cs,**/*.g.cs,**/*.g.i.cs</ExcludeByFile>
+
+          <!-- Use a deterministic source-link path so coverage works on any agent. -->
+          <UseSourceLink>true</UseSourceLink>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

@@ -182,12 +182,14 @@ stages:
               # NOTE: do NOT pass --logger trx or --results-directory here.
               # publishTestResults: true makes the task inject both automatically;
               # passing them again causes "--results-directory expects a single argument but 2 were provided".
+              #
+              # Coverage exclusions (Razor views, generated code, test assemblies)
+              # live in coverlet.runsettings at the repo root.
               arguments: >-
                 --configuration Release
                 --no-build
+                --settings coverlet.runsettings
                 --collect:"XPlat Code Coverage"
-                --
-                DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
               publishTestResults: true
               testRunTitle: 'web.tests ($(osTag))'
 
@@ -245,6 +247,7 @@ stages:
                 "-reports:$reports" `
                 "-targetdir:$target" `
                 "-reporttypes:HtmlInline_AzurePipelines;Cobertura;MarkdownSummaryGithub;Badges" `
+                "-classfilters:-AspNetCoreGeneratedDocument.*" `
                 "-title:Igloo Coverage" `
                 "-tag:$(Build.BuildNumber)"
             displayName: 'Generate merged coverage report'
