@@ -4,30 +4,39 @@
     ViewData["Title"] = "Delete Event";
 }
 
-<h1>Delete Event</h1>
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card form-card">
+            <div class="card-header-frost" style="background: linear-gradient(135deg, #c62828, #e53935) !important;">
+                <h4 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Delete Event</h4>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">Are you sure you want to delete this event? This cannot be undone.</p>
 
-<h3>Are you sure you want to delete this event?</h3>
+                <dl class="row">
+                    <dt class="col-sm-4"><i class="bi bi-bookmark"></i> Title</dt>
+                    <dd class="col-sm-8 fw-bold">@Model.Title</dd>
 
-<div class="card mb-4">
-    <div class="card-body">
-        <dl class="row">
-            <dt class="col-sm-3">@Html.DisplayNameFor(model => model.Title)</dt>
-            <dd class="col-sm-9">@Html.DisplayFor(model => model.Title)</dd>
+                    <dt class="col-sm-4"><i class="bi bi-calendar3"></i> Start Date</dt>
+                    <dd class="col-sm-8">@Model.StartDate.ToString("f")</dd>
 
-            <dt class="col-sm-3">@Html.DisplayNameFor(model => model.StartDate)</dt>
-            <dd class="col-sm-9">@Model.StartDate.ToString("f")</dd>
+                    <dt class="col-sm-4"><i class="bi bi-geo-alt-fill"></i> Location</dt>
+                    <dd class="col-sm-8">@Model.Location</dd>
 
-            <dt class="col-sm-3">@Html.DisplayNameFor(model => model.Location)</dt>
-            <dd class="col-sm-9">@Html.DisplayFor(model => model.Location)</dd>
+                    <dt class="col-sm-4"><i class="bi bi-people-fill"></i> Capacity</dt>
+                    <dd class="col-sm-8">@Model.Capacity</dd>
+                </dl>
 
-            <dt class="col-sm-3">@Html.DisplayNameFor(model => model.Capacity)</dt>
-            <dd class="col-sm-9">@Html.DisplayFor(model => model.Capacity)</dd>
-        </dl>
+                <form asp-action="Delete" class="mt-4">
+                    <input type="hidden" asp-for="Id" />
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                    <a asp-action="Index" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Cancel
+                    </a>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
-
-<form asp-action="Delete">
-    <input type="hidden" asp-for="Id" />
-    <button type="submit" class="btn btn-danger">Delete</button>
-    <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
-</form>
