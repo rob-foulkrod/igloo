@@ -1,7 +1,11 @@
+using web.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+builder.Services.AddSingleton<IEventService, InMemoryEventService>();
+builder.Services.AddSingleton<IRegistrationService, InMemoryRegistrationService>();
 
 var app = builder.Build();
 
